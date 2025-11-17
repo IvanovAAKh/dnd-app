@@ -3,25 +3,101 @@ import Sidebar from "./Sidebar";
 import DnDArea from "./DnDArea";
 import DnDAreaItem from "./DnDAreaItem";
 
-const columnsCount = 32;
+const COLUMNS_COUNT = 32;
+
+const getItemValidPosition = (newPosition, item, container, columnsCount) => {
+  const newPositionX = Math.max(0, Math.min(newPosition.x, (columnsCount - container.position.x - item.size.width)));
+  const newPositionY = Math.max(0, newPosition.y);
+
+  return {
+    x: newPositionX,
+    y: newPositionY,
+  };
+};
+
+const getContainerValidPosition = (newPosition, container, columnsCount) => {
+  const newPositionX = Math.max(0, Math.min(newPosition.x, columnsCount - container.size.width));
+  const newPositionY = Math.max(0, newPosition.y);
+
+  return {
+    x: newPositionX,
+    y: newPositionY,
+  };
+};
 
 export default function App() {
-  const [blocks, setBlocks] = useState([
-    {id: '1', position: {x: 2, y: 4}, size: {width: 6, height: 3}},
-    {id: '2', position: {x: 10, y: 12}, size: {width: 8, height: 4}}
+  const [containers, setContainers] = useState([
+    {
+      id: 'container_A', position: {x: 0, y: 0}, size: {width: 16, height: 7},
+      items: [
+        {
+          id: 'item_A', position: {x: 1, y: 1}, size: {width: 6, height: 3}
+        },
+        {
+          id: 'item_B', position: {x: 8, y: 3}, size: {width: 8, height: 4},
+        }
+      ],
+    },
+    {
+      id: 'containerB', position: {x: 19, y: 1}, size: {width: 10, height: 10},
+      items: [
+        {
+          id: 'item_A', position: {x: 4, y: 0}, size: {width: 6, height: 3}
+        },
+        {
+          id: 'item_B', position: {x: 0, y: 6}, size: {width: 8, height: 4},
+        }
+      ],
+    }
   ]);
   const [containerWidth, setContainerWidth] = useState(0);
-
   const containerRef = useRef(null);
+  const cellSize = containerWidth / COLUMNS_COUNT;
 
-  const cellSize = containerWidth / columnsCount;
+  const handleChangeContainerPosition = useCallback((containerIndex, position) => {
+    setContainers((containers) => {
+      const newContainers = [...containers];
+      newContainers[containerIndex] = {
+        ...newContainers[containerIndex],
+        position: getContainerValidPosition(
+          position,
+          newContainers[containerIndex],
+          COLUMNS_COUNT,
+        ),
+      };
+      return newContainers;
+    });
+  }, []);
 
-  const handleChangeItemPosition = useCallback((id, position) => {
-    setBlocks((prevBlocks) => prevBlocks.map((block) => {
-      if (block.id === id) {
-        return {...block, position};
+  const handleChangeItemPosition = useCallback((containerIndex, itemIndex, position) => {
+    setContainers(prevContainers => prevContainers.map((prevContainer, cIndex) => {
+      if (cIndex !== containerIndex) {
+        return prevContainer;
       }
-      return block;
+      const items = prevContainer.items.map((item, iIndex) => {
+        if (iIndex !== itemIndex) {
+          return item;
+        }
+        return {
+          ...item,
+          position: getItemValidPosition(
+            position,
+            item,
+            prevContainer,
+            COLUMNS_COUNT,
+          ),
+        };
+      });
+      const itemsRightEdges = items.map(item => item.position.x + item.size.width);
+      const itemsBottomEdges = items.map(item => item.position.y + item.size.height);
+      return {
+        ...prevContainer,
+        items,
+        size: {
+          height: Math.max(...itemsBottomEdges),
+          width: Math.max(...itemsRightEdges),
+        },
+      };
     }));
   }, []);
 
@@ -65,30 +141,42 @@ export default function App() {
         >
           <DnDArea
             cellSize={cellSize}
-            columnsCount={columnsCount}
           >
-            {blocks.map((block) => (
+            {containers.map((container, containerIndex) => (
               <DnDAreaItem
                 cellSize={cellSize}
-                id={block.id}
-                key={block.id}
-                onChangePosition={handleChangeItemPosition}
-                position={block.position}
-                size={block.size}
+                key={container.id}
+                onChangePosition={(position) => handleChangeContainerPosition(containerIndex, position)}
+                position={container.position}
+                size={container.size}
               >
-                <div
-                  style={{
-                    width: '1000px',
-                    height: '100%',
-                    backgroundColor: 'lightblue',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    fontSize: '24px'
-                  }}
+                <DnDArea
+                  cellSize={cellSize}
                 >
-                  {block.id}
-                </div>
+                  {container.items.map((item, itemIndex) => (
+                    <DnDAreaItem
+                      cellSize={cellSize}
+                      id={item.id}
+                      key={item.id}
+                      onChangePosition={(position) => handleChangeItemPosition(containerIndex, itemIndex, position)}
+                      position={item.position}
+                      size={item.size}
+                    >
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          fontSize: '24px'
+                        }}
+                      >
+                        {item.id}
+                      </div>
+                    </DnDAreaItem>
+                  ))}
+                </DnDArea>
               </DnDAreaItem>
             ))}
           </DnDArea>

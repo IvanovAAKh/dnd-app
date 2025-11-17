@@ -5,23 +5,22 @@ const TRANSITION_DURATION_MS = 250;
 export default function DnDAreaItem({
   cellSize,
   children,
-  id,
   onChangeSize,
   onChangePosition,
-  position: inputPosition,
-  size: inputSize,
+  position,
+  size,
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const draggingData = useRef(null);
-  const [transformPosition, setTransformPosition] = useState({x: 0, y: 0});
-  const [position, setPosition] = useState(inputPosition);
-  const [size, setSize] = useState(inputSize);
 
   const handleStartDragging = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     console.log("start dragging");
     setIsDragging(true);
     draggingData.current = {
+      dragStartX: position.x,
+      dragStartY: position.y,
       dragStartMouseX: e.clientX,
       dragStartMouseY: e.clientY,
     };
@@ -33,15 +32,6 @@ export default function DnDAreaItem({
       return;
     }
     setIsDragging(false);
-    if (transformPosition.x !== 0 || transformPosition.y !== 0) {
-      const updatedPosition = {
-        x: position.x + transformPosition.x,
-        y: position.y + transformPosition.y,
-      };
-      setTransformPosition({x: 0, y: 0});
-      setPosition(updatedPosition);
-      onChangePosition(id, updatedPosition);
-    }
   }
 
   const handleDrag = (e) => {
@@ -50,6 +40,8 @@ export default function DnDAreaItem({
       return;
     }
     const {
+      dragStartX,
+      dragStartY,
       dragStartMouseX,
       dragStartMouseY,
     } = draggingData.current;
@@ -59,9 +51,10 @@ export default function DnDAreaItem({
       x: Math.round(dragMouseDeltaX / cellSize),
       y: Math.round(dragMouseDeltaY / cellSize),
     };
-    if (updatedTransformPosition.x !== transformPosition.x || updatedTransformPosition.y !== transformPosition.y) {
-      setTransformPosition(updatedTransformPosition);
-    }
+    onChangePosition({
+      x: dragStartX + updatedTransformPosition.x,
+      y: dragStartY + updatedTransformPosition.y,
+    });
   }
 
   useEffect(() => {
@@ -74,25 +67,22 @@ export default function DnDAreaItem({
       document.removeEventListener('mousemove', handleDrag);
       document.removeEventListener('mouseup', handleStopDragging);
     };
-  }, [isDragging, transformPosition, position]);
+  }, [isDragging, position]);
 
   return (
     <div
       onMouseDown={handleStartDragging}
       style={{
-        backgroundColor: "lightblue",
+        backgroundColor: "white",
         cursor: isDragging ? "grabbing" : "grab",
         position: "absolute",
-        top: position.y * cellSize,
-        left: position.x * cellSize,
+        top: 0,
+        left: 0,
         width: size.width * cellSize,
         height: size.height * cellSize,
-        border: "1px solid black",
-        overflow: "auto",
-        transition: isDragging
-          ? `transform ${TRANSITION_DURATION_MS}ms ease`
-          : undefined,
-        transform: `translate(${transformPosition.x * cellSize}px, ${transformPosition.y * cellSize}px)`,
+        overflow: 'hidden',
+        transition: `transform ${TRANSITION_DURATION_MS}ms ease`,
+        transform: `translate(${position.x * cellSize}px, ${position.y * cellSize}px)`,
         zIndex: isDragging ? 999 : undefined,
       }}
     >
