@@ -51,6 +51,9 @@ export default function App() {
     }
   ]);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [draggableNewItem, setDraggableNewItem] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null);
+  const draggingData = useRef(null);
   const containerRef = useRef(null);
   const cellSize = containerWidth / COLUMNS_COUNT;
 
@@ -101,6 +104,182 @@ export default function App() {
     }));
   }, []);
 
+  const handeChangeNewItemPosition = (position) => {
+    setDraggableNewItem(prev => ({
+      ...prev,
+      position,
+    }));
+ }
+
+  const handleNewItemDragStart = (item) => {
+    setDraggableNewItem({
+      data: item.data,
+      size: {
+        width: Math.round(item.size.width / cellSize),
+        height: Math.round(item.size.height / cellSize),
+      },
+      position: {
+        x: 0,
+        y: 0
+      },
+    });
+    draggingData.current = {
+      mouseOffset: item.mouseOffset,
+    };
+    console.log('handleNewItemDragStart', item);
+  }
+
+  const handleDragEnterContainer = (event, dropTargetType, containerIndex) => {
+    if (!draggableNewItem) {
+      return;
+    }
+    console.log('handleDragEnterContainers', dropTargetType, containerIndex);
+    const mouseEnterCellPosition = {
+      x: Math.round(Math.abs(event.nativeEvent.offsetX) / cellSize),
+      y: Math.round(Math.abs(event.nativeEvent.offsetY) / cellSize),
+    };
+    const itemTakenCellPosition = {
+      x: Math.round(draggingData.current.mouseOffset.x / cellSize),
+      y: Math.round(draggingData.current.mouseOffset.y / cellSize),
+    }
+    const position = {
+      x: mouseEnterCellPosition.x - itemTakenCellPosition.x,
+      y: mouseEnterCellPosition.y - itemTakenCellPosition.y,
+    };
+    draggingData.current = {
+      ...draggingData.current,
+      dragStartX: position.x,
+      dragStartY: position.y,
+      dragStartMouseX: event.nativeEvent.offsetX,
+      dragStartMouseY: event.nativeEvent.offsetY,
+    };
+    setDraggableNewItem(prev => ({
+      ...prev,
+      position,
+    }));
+    setDropTarget({
+      index: containerIndex,
+      type: dropTargetType,
+    });
+  }
+
+  const handleDragOverContainer = (event) => {
+    if (!draggableNewItem) {
+      return;
+    }
+    const {
+      dragStartX,
+      dragStartY,
+      dragStartMouseX,
+      dragStartMouseY,
+    } = draggingData.current;
+    const dragMouseDeltaX = event.nativeEvent.offsetX - dragStartMouseX;
+    const dragMouseDeltaY = event.nativeEvent.offsetY - dragStartMouseY;
+    const updatedTransformPosition = {
+      x: Math.round(dragMouseDeltaX / cellSize),
+      y: Math.round(dragMouseDeltaY / cellSize),
+    };
+    const foundContainer = containers[dropTarget.index];
+    const externalContainer = {
+      position: {
+        x: 0,
+        y: 0,
+      },
+      size: {
+        height: null,
+        width: COLUMNS_COUNT,
+      },
+    };
+    const newPosition = getItemValidPosition(
+      {
+        x: dragStartX + updatedTransformPosition.x,
+        y: dragStartY + updatedTransformPosition.y,
+      },
+      draggableNewItem,
+      foundContainer || externalContainer,
+      COLUMNS_COUNT,
+    );
+    if (draggableNewItem.position.x !== newPosition.x
+      || draggableNewItem.position.y !== newPosition.y
+    ) {
+      handeChangeNewItemPosition(newPosition);
+      setContainers(prev => prev.map((container, index) => {
+        if (index !== dropTarget.index) {
+          return container;
+        }
+        const items = container.items.concat({
+          ...draggableNewItem,
+          position: newPosition,
+        })
+        const itemsRightEdges = items.map(item => item.position.x + item.size.width);
+        const itemsBottomEdges = items.map(item => item.position.y + item.size.height);
+        return {
+          ...container,
+          size: {
+            height: Math.max(...itemsBottomEdges),
+            width: Math.max(...itemsRightEdges),
+          },
+        };
+      }));
+    }
+  }
+
+  const handleDragLeaveContainer = (dropTargetType, containerIndex) => {
+    console.log('handleDragLeaveContainer', dropTargetType);
+    setDropTarget(prev => (
+      prev.type === dropTargetType && prev.index === containerIndex ? null : prev
+    ));
+    setContainers(prev => prev.map((container, index) => {
+      if (index !== containerIndex) {
+        return container;
+      }
+      const itemsRightEdges = container.items.map(item => item.position.x + item.size.width);
+      const itemsBottomEdges = container.items.map(item => item.position.y + item.size.height);
+      return {
+        ...container,
+        size: {
+          height: Math.max(...itemsBottomEdges),
+          width: Math.max(...itemsRightEdges),
+        },
+      };
+    }));
+  }
+
+  const handleDropContainer = () => {
+    console.log('handleDropContainer');
+    setContainers(prevContainers => {
+      const foundContainerToDrop = prevContainers[dropTarget.index];
+      return foundContainerToDrop
+        ? prevContainers.map((container, index) => {
+          if (index !== dropTarget.index) {
+            return container;
+          }
+          return {
+            ...container,
+            items: container.items.concat({
+              id: Date.now().toString(),
+              position: draggableNewItem.position,
+              size: draggableNewItem.size,
+            }),
+          };
+        })
+        : prevContainers
+          .concat({
+            id: 'Container_'.concat(Date.now().toString()),
+            position: draggableNewItem.position,
+            size: draggableNewItem.size,
+            items: [{
+              id: Date.now().toString(),
+              position: {x: 0, y: 0},
+              size: draggableNewItem.size
+            }],
+          });
+    });
+    setDraggableNewItem(null);
+    setDropTarget(null);
+    draggingData.current = null;
+  }
+
   useEffect(() => {
     const update = () => {
       if (!containerRef.current) return;
@@ -122,7 +301,9 @@ export default function App() {
         gap: '16px',
       }}
     >
-      <Sidebar />
+      <Sidebar
+        onDragStart={handleNewItemDragStart}
+      />
       <div
         style={{
           display: "flex",
@@ -141,6 +322,12 @@ export default function App() {
         >
           <DnDArea
             cellSize={cellSize}
+            onDragEnter={(event) => {
+              handleDragEnterContainer(event, 'CONTAINERS')
+            }}
+            onDragLeave={() => handleDragLeaveContainer('CONTAINERS')}
+            onDragOver={handleDragOverContainer}
+            onDrop={handleDropContainer}
           >
             {containers.map((container, containerIndex) => (
               <DnDAreaItem
@@ -151,12 +338,32 @@ export default function App() {
                 size={container.size}
               >
                 <DnDArea
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleDragEnterContainer(event, 'CONTAINER', containerIndex)
+                  }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleDragLeaveContainer('CONTAINER', containerIndex);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleDragOverContainer(event)
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleDropContainer();
+                  }}
                   cellSize={cellSize}
                 >
                   {container.items.map((item, itemIndex) => (
                     <DnDAreaItem
                       cellSize={cellSize}
-                      id={item.id}
+                      disablePointerEvents={!!draggableNewItem}
                       key={item.id}
                       onChangePosition={(position) => handleChangeItemPosition(containerIndex, itemIndex, position)}
                       position={item.position}
@@ -164,6 +371,7 @@ export default function App() {
                     >
                       <div
                         style={{
+                          backgroundColor: 'lightgreen',
                           width: '100%',
                           height: '100%',
                           display: 'flex',
@@ -176,9 +384,46 @@ export default function App() {
                       </div>
                     </DnDAreaItem>
                   ))}
+                  {dropTarget?.type === 'CONTAINER'
+                  && dropTarget?.index === containerIndex
+                  && draggableNewItem
+                  && (
+                    <DnDAreaItem
+                      cellSize={cellSize}
+                      disablePointerEvents
+                      onChangePosition={() => ({})}
+                      position={draggableNewItem.position}
+                      size={draggableNewItem.size}
+                    >
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          backgroundColor: 'lightgray',
+                        }}
+                      />
+                    </DnDAreaItem>
+                  )}
                 </DnDArea>
               </DnDAreaItem>
             ))}
+            {dropTarget?.type === 'CONTAINERS' && draggableNewItem && (
+              <DnDAreaItem
+                cellSize={cellSize}
+                disablePointerEvents
+                onChangePosition={() => ({})}
+                position={draggableNewItem.position}
+                size={draggableNewItem.size}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: 'lightgray',
+                  }}
+                />
+              </DnDAreaItem>
+            )}
           </DnDArea>
         </div>
       </div>

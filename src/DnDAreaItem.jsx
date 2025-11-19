@@ -1,10 +1,11 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 
 const TRANSITION_DURATION_MS = 250;
 
 export default function DnDAreaItem({
   cellSize,
   children,
+  disablePointerEvents = false,
   onChangeSize,
   onChangePosition,
   position,
@@ -26,17 +27,17 @@ export default function DnDAreaItem({
     };
   }
 
-  const handleStopDragging = (e) => {
+  const handleStopDragging = useCallback((e) => {
     console.log("stop dragging");
     if (!isDragging) {
       return;
     }
     setIsDragging(false);
-  }
+  }, [isDragging]);
 
-  const handleDrag = (e) => {
+  const handleDrag = useCallback((e) => {
     console.log("dragging");
-    if (!isDragging) {
+    if (!isDragging || !draggingData.current) {
       return;
     }
     const {
@@ -55,7 +56,7 @@ export default function DnDAreaItem({
       x: dragStartX + updatedTransformPosition.x,
       y: dragStartY + updatedTransformPosition.y,
     });
-  }
+  }, [isDragging, cellSize, onChangePosition]);
 
   useEffect(() => {
     if (!isDragging) {
@@ -67,13 +68,13 @@ export default function DnDAreaItem({
       document.removeEventListener('mousemove', handleDrag);
       document.removeEventListener('mouseup', handleStopDragging);
     };
-  }, [isDragging, position]);
+  }, [isDragging, handleDrag, handleStopDragging]);
 
   return (
     <div
       onMouseDown={handleStartDragging}
       style={{
-        backgroundColor: "white",
+        backgroundColor: "#deeef5",
         cursor: isDragging ? "grabbing" : "grab",
         position: "absolute",
         top: 0,
@@ -81,7 +82,9 @@ export default function DnDAreaItem({
         width: size.width * cellSize,
         height: size.height * cellSize,
         overflow: 'hidden',
-        transition: `transform ${TRANSITION_DURATION_MS}ms ease`,
+        userSelect: 'none',
+        pointerEvents: disablePointerEvents ? 'none' : undefined,
+        transition: disablePointerEvents ? 'none' : `transform ${TRANSITION_DURATION_MS}ms ease`,
         transform: `translate(${position.x * cellSize}px, ${position.y * cellSize}px)`,
         zIndex: isDragging ? 999 : undefined,
       }}
