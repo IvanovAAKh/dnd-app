@@ -7,7 +7,7 @@ import {
   StyledProps,
 } from './types';
 
-import inputContainers from './utils/data.ts';
+import inputContainers from './utils/realData.ts';
 
 import PDF from './PDF.tsx';
 

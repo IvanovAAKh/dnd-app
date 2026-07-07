@@ -22,7 +22,7 @@ const containerA = {
   items: [
     {
       id: 'Item AA',
-      ...rect(0, 0, 1, 20),
+      ...rect(0, 0, 1, 15),
     },
     {
       id: 'Item AB',
@@ -62,7 +62,7 @@ const containerC = {
   items: [
     {
       id: 'Item CA',
-      ...rect(0, 0, 1, 20),
+      ...rect(0, 0, 1, 15),
     },
     {
       id: 'Item CB',
@@ -70,10 +70,10 @@ const containerC = {
     },
     {
       id: 'Item CC',
-      ...rect(3, 0, 1, 20),
+      ...rect(3, 0, 1, 15),
     },
   ],
-  ...rect(8, 0, 4, 20),
+  ...rect(8, 0, 4, 15),
 };
 
 const containerD = {
@@ -82,7 +82,7 @@ const containerD = {
   items: [
     {
       id: 'Item DA',
-      ...rect(0, 0, 1, 20),
+      ...rect(0, 0, 1, 15),
     },
     {
       id: 'Item DB',
@@ -90,10 +90,10 @@ const containerD = {
     },
     {
       id: 'Item DC',
-      ...rect(3, 0, 1, 20),
+      ...rect(3, 0, 1, 15),
     },
   ],
-  ...rect(0, 24, 4, 20),
+  ...rect(0, 24, 4, 15),
 };
 
 const containerE = {
@@ -102,7 +102,7 @@ const containerE = {
   items: [
     {
       id: 'Item EA',
-      ...rect(0, 0, 1, 20),
+      ...rect(0, 0, 1, 15),
     },
     {
       id: 'Item EB',
@@ -110,10 +110,10 @@ const containerE = {
     },
     {
       id: 'Item EC',
-      ...rect(3, 0, 1, 20),
+      ...rect(3, 0, 1, 15),
     },
   ],
-  ...rect(4, 14, 4, 20),
+  ...rect(4, 14, 4, 15),
 };
 
 const containerF = {
@@ -122,7 +122,7 @@ const containerF = {
   items: [
     {
       id: 'Item FA',
-      ...rect(0, 0, 1, 20),
+      ...rect(0, 0, 1, 15),
     },
     {
       id: 'Item FB',
@@ -130,10 +130,10 @@ const containerF = {
     },
     {
       id: 'Item FC',
-      ...rect(3, 0, 1, 20),
+      ...rect(3, 0, 1, 15),
     },
   ],
-  ...rect(8, 24, 4, 20),
+  ...rect(8, 24, 4, 15),
 };
 
 const data: Container[] = [
