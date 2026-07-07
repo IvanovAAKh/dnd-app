@@ -27,7 +27,7 @@ export type AreaData = {
 
 // A4 at 144 PPI: 297mm total, 25mm top margin, 20mm bottom margin
 // Available content height = (297 - 25 - 20)mm * (144 / 25.4) px/mm ≈ 1428px
-export const PAGE_CONTENT_HEIGHT = 1428;
+export const PAGE_CONTENT_HEIGHT = 400;
 
 const measureElementPosition = (element: Element): Position => {
   return {
@@ -100,56 +100,56 @@ export const splitContainersByPages = (
   const pages: PureContainer[][] = [[]];
 
   /**
-   * Compute the Y position a container would get on a page after fixBoundsOverlapping.
+   * Compute where a new container would be placed on a page, given already-placed containers.
+   * Finds the lowest Y position (≥0) where the container doesn't vertically overlap
+   * with any existing container that horizontally overlaps with it.
    */
-  const computePositionOnPage = (page: PureContainer[], container: PureContainer): PureContainer[] => {
-    const candidate = { ...container, position: { x: container.position.x, y: 0 } };
-    return fixBoundsOverlapping([...page, candidate], undefined, true);
+  const findPositionOnPage = (page: PureContainer[], container: PureContainer): number => {
+    let y = 0;
+
+    // Find containers that horizontally overlap with the new one
+    const conflicts = page.filter(existing => {
+      const existingRight = existing.position.x + existing.size.width;
+      const newRight = container.position.x + container.size.width;
+      return container.position.x < existingRight && newRight > existing.position.x;
+    });
+
+    // Place below all conflicting containers
+    for (const conflict of conflicts) {
+      const conflictBottom = conflict.position.y + conflict.size.height;
+      if (conflictBottom > y) {
+        y = conflictBottom;
+      }
+    }
+
+    return y;
   };
 
   /**
-   * Check if a container can be placed on a page. A container "fits" if:
-   * - It fits entirely (bottom <= PAGE_CONTENT_HEIGHT), OR
-   * - It doesn't horizontally overlap with any existing container on the page
-   *   (so it gets y=0 and doesn't push anything down — it's independent/oversized but OK)
+   * Check if a container can be placed on a page.
    */
   const fitsOnPage = (page: PureContainer[], container: PureContainer): boolean => {
-    if (page.length === 0) return true;
-
-    const repositioned = computePositionOnPage(page, container);
-    const placed = repositioned[repositioned.length - 1];
-
-    // If it fits within page height — always OK
-    if (placed.position.y + placed.size.height <= PAGE_CONTENT_HEIGHT) {
-      return true;
-    }
-
-    // If it's oversized but positioned at y=0 (no horizontal conflicts with others),
-    // it can coexist on this page without pushing anyone down
-    if (placed.position.y === 0) {
-      return true;
-    }
-
-    return false;
+    const y = findPositionOnPage(page, container);
+    return y + container.size.height <= PAGE_CONTENT_HEIGHT;
   };
 
   /**
    * Place a container on the earliest page where it fits, or split it.
+   * startPage: minimum page index to consider (for continuations, prevents going back)
    */
-  const placeContainer = (container: PureContainer): void => {
-    // 1. Try to fit entirely on any existing page
-    for (let i = 0; i < pages.length; i++) {
+  const placeContainer = (container: PureContainer, startPage = 0): void => {
+    // 1. Try to fit entirely on any existing page (from startPage onward)
+    for (let i = startPage; i < pages.length; i++) {
       if (fitsOnPage(pages[i], container)) {
-        pages[i] = computePositionOnPage(pages[i], container);
+        const y = findPositionOnPage(pages[i], container);
+        pages[i].push({ ...container, position: { x: container.position.x, y } });
         return;
       }
     }
 
-    // 2. Doesn't fit anywhere — try splitting on each page (prefer earliest)
-    for (let i = 0; i < pages.length; i++) {
-      const repositioned = computePositionOnPage(pages[i], container);
-      const placed = repositioned[repositioned.length - 1];
-      const containerY = placed.position.y;
+    // 2. Doesn't fit anywhere — try splitting on each page (from startPage onward)
+    for (let i = startPage; i < pages.length; i++) {
+      const containerY = findPositionOnPage(pages[i], container);
       const availableForItems = PAGE_CONTENT_HEIGHT - containerY - containerTitleHeight;
 
       // Skip if no space for even the header
@@ -160,8 +160,12 @@ export const splitContainersByPages = (
       const fitting = sortedItems.filter(item => item.position.y + item.size.height <= availableForItems);
       const remaining = sortedItems.filter(item => item.position.y + item.size.height > availableForItems);
 
-      // Only split if: there are fitting items AND transferring remaining gives more space
-      if (fitting.length > 0 && remaining.length > 0 && availableForItems < fullPageItemSpace) {
+      // Split if: there are fitting items AND remaining items AND either:
+      // - transferring remaining gives more space (container not at page top), OR
+      // - container doesn't fit on this page (needs to be split regardless)
+      const containerExceedsPage = containerY + container.size.height > PAGE_CONTENT_HEIGHT;
+      const nextPageHasMoreSpace = availableForItems < fullPageItemSpace;
+      if (fitting.length > 0 && remaining.length > 0 && (nextPageHasMoreSpace || containerExceedsPage)) {
         // Split: place fitting items on this page
         const partHeight = calculateContainerHeight(fitting, containerTitleHeight, containersGap);
         const currentPart: PureContainer = {
@@ -170,7 +174,7 @@ export const splitContainersByPages = (
           position: { x: container.position.x, y: containerY },
           size: { ...container.size, height: partHeight },
         };
-        pages[i] = [...repositioned.slice(0, -1), currentPart];
+        pages[i].push(currentPart);
 
         // Create continuation with remaining items repositioned to top
         const adjusted = remaining.map(item => ({
@@ -187,14 +191,55 @@ export const splitContainersByPages = (
           size: { ...container.size, height: contHeight },
         };
 
-        // Place continuation recursively (it may fit on an existing page or need further splitting)
-        placeContainer(continuation);
+        // Place continuation recursively (must go on page after current)
+        placeContainer(continuation, i + 1);
         return;
       }
     }
 
-    // 3. Can't split usefully — place as-is on a new page (oversized case)
-    pages.push([{ ...container, position: { x: container.position.x, y: 0 } }]);
+    // 3. Can't split on any existing page — create a new page and try splitting there
+    pages.push([]);
+    const newPageIdx = pages.length - 1;
+    const containerY = 0; // top of new empty page
+    const availableForItems = PAGE_CONTENT_HEIGHT - containerY - containerTitleHeight;
+
+    if (availableForItems > 0) {
+      const sortedItems = [...container.items].sort((a, b) => a.position.y - b.position.y);
+      const fitting = sortedItems.filter(item => item.position.y + item.size.height <= availableForItems);
+      const remaining = sortedItems.filter(item => item.position.y + item.size.height > availableForItems);
+
+      if (fitting.length > 0 && remaining.length > 0) {
+        // Split on the new page
+        const partHeight = calculateContainerHeight(fitting, containerTitleHeight, containersGap);
+        const currentPart: PureContainer = {
+          ...container,
+          items: fitting,
+          position: { x: container.position.x, y: 0 },
+          size: { ...container.size, height: partHeight },
+        };
+        pages[newPageIdx].push(currentPart);
+
+        const adjusted = remaining.map(item => ({
+          ...item,
+          position: { ...item.position, y: item.position.y - availableForItems },
+          size: { ...item.size },
+        }));
+        const repoItems = fixBoundsOverlapping(adjusted, undefined, true);
+        const contHeight = calculateContainerHeight(repoItems, containerTitleHeight, containersGap);
+        const continuation: PureContainer = {
+          ...container,
+          items: repoItems,
+          position: { x: container.position.x, y: 0 },
+          size: { ...container.size, height: contHeight },
+        };
+
+        placeContainer(continuation, newPageIdx + 1);
+        return;
+      }
+    }
+
+    // Truly can't split — place as-is (oversized, all items stay)
+    pages[newPageIdx].push({ ...container, position: { x: container.position.x, y: 0 } });
   };
 
   // Process each container

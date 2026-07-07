@@ -246,7 +246,7 @@ const data = [
       "height": 86,
       "width": 8
     },
-    "title": ""
+    "title": "6"
   }
 ];
 
