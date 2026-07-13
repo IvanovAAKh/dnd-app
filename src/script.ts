@@ -23,11 +23,12 @@ export type AreaData = {
   containersGap: number;
   containerTitleHeight: number;
   itemsGap: number;
+  zoom: number;
 };
 
 // A4 at 144 PPI: 297mm total, 25mm top margin, 20mm bottom margin
 // Available content height = (297 - 25 - 20)mm * (144 / 25.4) px/mm ≈ 1428px
-export const PAGE_CONTENT_HEIGHT = 600;
+export const PAGE_CONTENT_HEIGHT = 1428;
 
 const measureElementPosition = (element: Element): Position => {
   return {
@@ -63,6 +64,7 @@ const getAreaData = (areaEl: HTMLElement): AreaData => {
       areaEl.getAttribute('data-pdf-container-title-height') || 0
     ),
     itemsGap: +(areaEl.getAttribute('data-pdf-items-gap') || 0),
+    zoom: +(areaEl.getAttribute('data-pdf-zoom') || 0),
   };
   return areaData;
 };
@@ -356,11 +358,34 @@ const buildContainers = (
   return containers;
 };
 
+const zoomContainers = (containers: Container[], zoom: number): Container[] => {
+  return containers.map((container) => ({
+    ...container,
+    items: container.items.map((item) => ({
+      ...item,
+      position: { x: item.position.x * zoom, y: item.position.y * zoom },
+      size: { height: item.size.height * zoom, width: item.size.width * zoom },
+    })),
+    position: { x: container.position.x * zoom, y: container.position.y * zoom },
+    size: { height: container.size.height * zoom, width: container.size.width * zoom },
+  }));
+};
+
+const zoomAreaData = (areaData: AreaData): AreaData => {
+  const { zoom } = areaData;
+  return {
+    ...areaData,
+    containerTitleHeight: areaData.containerTitleHeight * zoom,
+    containersGap: areaData.containersGap * zoom,
+  };
+};
+
 const px = (value: number) => {
   return `${value}px`;
 };
 
 const redrawContainers = (containers: Container[], areaData: AreaData) => {
+  const { zoom } = areaData;
   containers.forEach((container) => {
     container.el.style.transform = `translate(${px(container.position.x)}, ${px(container.position.y)})`;
     container.el.style.height = px(container.size.height);
@@ -369,18 +394,34 @@ const redrawContainers = (containers: Container[], areaData: AreaData) => {
     const containerContentEl = container.el.querySelector(
       '[data-pdf-container-content]',
     ) as HTMLElement;
-    const containerContentHeight =
-      container.size.height - areaData.containersGap;
+    const containerContentHeight = container.size.height - areaData.containersGap;
+    const containerContentWidth = container.size.width - areaData.containersGap;
     containerContentEl.style.height = px(containerContentHeight);
+    containerContentEl.style.width = px(containerContentWidth);
+    containerContentEl.style.margin = px(areaData.containersGap / 2);
+
     const containerTileContentEl = containerContentEl.querySelector(
       '[data-pdf-container-tile-content]',
     ) as HTMLElement;
     containerTileContentEl.style.height = px(containerContentHeight);
+    containerTileContentEl.style.width = px(containerContentWidth - areaData.containerBorderSize * 2);
+
+    // Apply scale to container title
+    const titleEl = container.el.querySelector('[data-pdf-container-title]') as HTMLElement | null;
+    if (titleEl) {
+      titleEl.style.transform = `scale(${zoom})`;
+      titleEl.style.transformOrigin = 'top left';
+      titleEl.style.height = px(areaData.containerTitleHeight);
+    }
 
     container.items.forEach((item) => {
-      item.el.style.transform = `translate(${px(item.position.x)}, ${px(item.position.y)})`;
-      item.el.style.height = px(item.size.height);
-      item.el.style.width = px(item.size.width);
+      // Item element gets ORIGINAL (un-zoomed) dimensions; scale(zoom) visually reduces it
+      const originalWidth = item.size.width / zoom;
+      const originalHeight = item.size.height / zoom;
+      item.el.style.transform = `translate(${px(item.position.x)}, ${px(item.position.y)}) scale(${zoom})`;
+      item.el.style.transformOrigin = 'top left';
+      item.el.style.height = px(originalHeight);
+      item.el.style.width = px(originalWidth);
     });
   });
 };
@@ -391,7 +432,9 @@ export const execute = () => {
     return;
   }
   const areaData = getAreaData(areaEl);
-  const containers = buildContainers(areaEl, areaData);
+  const rawContainers = buildContainers(areaEl, areaData);
+  const containers = zoomContainers(rawContainers, areaData.zoom);
+  const zoomed = zoomAreaData(areaData);
 
   // Convert DOM-linked containers to pure data for splitting
   const pureContainers: PureContainer[] = containers.map((c) => ({
@@ -407,7 +450,7 @@ export const execute = () => {
   }));
 
   // Split containers across pages
-  const containersByPages = splitContainersByPages(pureContainers, areaData);
+  const containersByPages = splitContainersByPages(pureContainers, zoomed);
 
   // Build lookup maps from original DOM-linked containers/items by ID
   const containerElMap = new Map<string, HTMLElement>();
@@ -496,7 +539,7 @@ export const execute = () => {
         title: pc.title,
       };
     });
-    redrawContainers(domContainers, areaData);
+    redrawContainers(domContainers, zoomed);
   }
 
   // Draw red page-break lines between pages

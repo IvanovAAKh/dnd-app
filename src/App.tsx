@@ -125,6 +125,7 @@ const App = ()=> {
         data-pdf-container-title-height={CONTAINER_TITLE_HEIGHT}
         data-pdf-containers-gap={CONTAINERS_GAP}
         data-pdf-items-gap={ITEMS_GAP}
+        data-pdf-zoom={1}
         styledProps={{ height: 10000, width: areaWidth }}
       >
         {containers.map((container) => {
