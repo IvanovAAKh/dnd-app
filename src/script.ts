@@ -28,7 +28,7 @@ export type AreaData = {
 
 // A4 at 144 PPI: 297mm total, 25mm top margin, 20mm bottom margin
 // Available content height = (297 - 25 - 20)mm * (144 / 25.4) px/mm ≈ 1428px
-export const PAGE_CONTENT_HEIGHT = 1428;
+export const PAGE_CONTENT_HEIGHT = 400;
 
 const measureElementPosition = (element: Element): Position => {
   return {
@@ -261,30 +261,31 @@ export const splitContainersByPages = (
 
   // Track page assignments for ordering (containers must respect original Y-order
   // among those that horizontally overlap)
-  const containerFirstPage: number[] = [];
+  const containerLastPage: number[] = [];
 
   for (let ci = 0; ci < sorted.length; ci++) {
     const container = sorted[ci];
 
     // Determine minimum page based on earlier containers with horizontal overlap
+    // Must be >= the LAST page of any earlier overlapping container (not just the first)
     let minPage = 0;
     for (let prev = 0; prev < ci; prev++) {
       if (horizontalOverlap(container, sorted[prev])) {
-        minPage = Math.max(minPage, containerFirstPage[prev]);
+        minPage = Math.max(minPage, containerLastPage[prev]);
       }
     }
 
     placeContainer(container, minPage);
 
-    // Record which page this container first appears on
-    let placedPage = 0;
-    for (let p = minPage; p < pages.length; p++) {
+    // Record the LAST page this container appears on (for split containers)
+    let lastPage = 0;
+    for (let p = pages.length - 1; p >= 0; p--) {
       if (pages[p].some(c => c.id === container.id)) {
-        placedPage = p;
+        lastPage = p;
         break;
       }
     }
-    containerFirstPage.push(placedPage);
+    containerLastPage.push(lastPage);
   }
 
   // Convert page-relative positions to absolute, filter empty pages

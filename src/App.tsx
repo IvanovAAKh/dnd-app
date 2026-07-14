@@ -23,7 +23,7 @@ type StyledBoxProps = {
   y: number;
 };
 
-const MIN_COLUMN_WIDTH = 60;
+const MIN_COLUMN_WIDTH = 40;
 const ROW_HEIGHT = 16;
 const CONTAINERS_GAP = 16;
 const CONTAINERS_HALF_GAP = CONTAINERS_GAP / 2;
@@ -103,7 +103,7 @@ const convertContainersFromInput = (
 const App = ()=> {
   const [isRendered, setIsRendered] = useState(false);
   const areaWidth = 900;
-  const columnsCount = 12;
+  const columnsCount = 24;
   const areaColumnWidth = Math.max(MIN_COLUMN_WIDTH, areaWidth / columnsCount);
   const containers = convertContainersFromInput(inputContainers);
 
